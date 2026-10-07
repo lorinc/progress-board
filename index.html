@@ -7,17 +7,17 @@
 <style>
 :root {
   --bg: #f6f5f1; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a65; --line: #e2e0d8;
-  --clean: #2f8f5b; --accent: #3a5bc4; --empty: #ecebe5;
+  --clean: #2f8f5b; --g1: #b7e4c3; --g2: #6fcb8a; --g3: #36a35d; --g4: #1d6e3c; --accent: #3a5bc4; --empty: #ecebe5;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #161614; --card: #21211e; --ink: #ecebe6; --muted: #9a9890; --line: #34332f;
-    --clean: #4cb37b; --accent: #7d97ec; --empty: #2c2c28;
+    --clean: #4cb37b; --g1: #123d24; --g2: #1d6b3b; --g3: #2e9e57; --g4: #4fd37f; --accent: #7d97ec; --empty: #2c2c28;
   }
 }
 :root[data-theme="dark"] {
   --bg: #161614; --card: #21211e; --ink: #ecebe6; --muted: #9a9890; --line: #34332f;
-  --clean: #4cb37b; --accent: #7d97ec; --empty: #2c2c28;
+  --clean: #4cb37b; --g1: #123d24; --g2: #1d6b3b; --g3: #2e9e57; --g4: #4fd37f; --accent: #7d97ec; --empty: #2c2c28;
 }
 * { box-sizing: border-box; }
 body { margin: 0; overflow-x: hidden; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -39,9 +39,15 @@ h1 { font-size: 1.6rem; margin: 0 0 4px; }
 .stat b { display: block; font-size: 1.4rem; }
 .stat span { color: var(--muted); font-size: .8rem; }
 h3 { font-size: .95rem; margin: 20px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-.days { display: flex; flex-wrap: wrap; gap: 4px; }
-.day { width: 18px; height: 18px; border-radius: 4px; background: var(--empty); }
-.day.clean { background: var(--clean); }
+.graph { display: flex; gap: 6px; }
+.graph .labels { display: grid; grid-template-rows: 14px repeat(5, 12px); gap: 3px; font-size: .7rem; color: var(--muted); line-height: 12px; }
+.graph .weeks { display: grid; grid-template-rows: 14px repeat(5, 12px); grid-auto-flow: column; grid-auto-columns: 12px; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+.graph .month { font-size: .7rem; color: var(--muted); white-space: nowrap; line-height: 12px; }
+.cell { width: 12px; height: 12px; border-radius: 3px; background: var(--empty); }
+.cell.l1 { background: var(--g1); } .cell.l2 { background: var(--g2); } .cell.l3 { background: var(--g3); } .cell.l4 { background: var(--g4); }
+.cell.future { background: transparent; outline: 1px dashed var(--line); outline-offset: -1px; }
+.scale { display: flex; align-items: center; gap: 3px; font-size: .75rem; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
+.scale .cell { display: inline-block; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); margin-top: 6px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
 .chart { position: relative; height: 160px; width: 100%; overflow: hidden; }
@@ -69,6 +75,39 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+const DAY = 86400000;
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const utc = iso => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+const iso = t => new Date(t).toISOString().slice(0, 10);
+let SCHOOL_START = null;
+
+function shade(d) {
+  if (d.self_run) return 4;
+  return d.parts >= 5 ? 3 : d.parts >= 3 ? 2 : d.parts >= 1 ? 1 : 0;
+}
+
+function graph(days, i) {
+  const byDate = Object.fromEntries(days.map(d => [d.date, d]));
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const first = Math.min(utc(SCHOOL_START), ...days.map(d => utc(d.date)));
+  const last = Math.max(today, ...days.map(d => utc(d.date)));
+  const monday = t => t - ((new Date(t).getUTCDay() + 6) % 7) * DAY;
+  let cells = '', prevMonth = -1;
+  for (let w = monday(first); w <= last; w += 7 * DAY) {
+    const m = new Date(w).getUTCMonth();
+    cells += `<div class="month">${m !== prevMonth ? MONTHS[m] : ''}</div>`;
+    prevMonth = m;
+    for (let k = 0; k < 5; k++) {
+      const t = w + k * DAY, key = iso(t), d = byDate[key];
+      if (t > today && !d) { cells += '<div class="cell future"></div>'; continue; }
+      const label = d ? (d.self_run ? 'self-run day' : `${d.parts} of 5 parts`) : 'no school day recorded';
+      cells += `<div class="cell ${d ? 'l' + shade(d) : ''}" title="${key}: ${label}"></div>`;
+    }
+  }
+  return `<div class="graph"><div class="labels"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span></div><div class="weeks" id="weeks${i}">${cells}</div></div>`;
+}
+
 function card(s, i) {
   const n = s.now, days = s.days;
   const mornings = days.filter(d => d.morning_done).length;
@@ -95,9 +134,9 @@ function card(s, i) {
       <div class="stat"><b>${estErr}</b><span>time estimate error (last 5 days)</span></div>
       <div class="stat"><b>${days.slice(-5).reduce((a, d) => a + d.again_mistakes, 0)}</b><span>"again" mistakes caught (last 5 days)</span></div>
     </div>
-    <h3>Every day</h3>
-    <div class="days">${days.length ? days.map(d => `<div class="day ${d.self_run ? 'clean' : ''}" title="${d.date}"></div>`).join('') : '<span class="empty">No days yet</span>'}</div>
-    <div class="legend"><span><i style="background:var(--clean)"></i>self-run day</span><span><i style="background:var(--empty)"></i>school day</span></div>
+    <h3>Every school day</h3>
+    ${graph(days, i)}
+    <div class="scale">Less <span class="cell"></span><span class="cell l1"></span><span class="cell l2"></span><span class="cell l3"></span><span class="cell l4"></span> More &nbsp;·&nbsp; darkest = a self-run day</div>
     <h3>Self-run days, adding up</h3>
     ${days.length ? `<div class="chart"><canvas id="lvl${i}"></canvas></div>` : '<span class="empty">No days yet</span>'}
     <h3>Current topics</h3>
@@ -108,8 +147,11 @@ function card(s, i) {
 }
 
 fetch('data.json').then(r => r.json()).then(data => {
+  SCHOOL_START = data.school_start;
   document.getElementById('cards').innerHTML = data.students.map(card).join('');
   data.students.forEach((s, i) => {
+    const w = document.getElementById('weeks' + i);
+    if (w) w.scrollLeft = w.scrollWidth;
     if (!s.days.length || !window.Chart) return;
     let total = 0;
     const cumulative = s.days.map(d => total += d.self_run ? 1 : 0);
