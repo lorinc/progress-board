@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Progress Board</title>
+<style>
+:root {
+  --bg: #f6f5f1; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a65; --line: #e2e0d8;
+  --clean: #2f8f5b; --accent: #3a5bc4; --empty: #ecebe5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161614; --card: #21211e; --ink: #ecebe6; --muted: #9a9890; --line: #34332f;
+    --clean: #4cb37b; --accent: #7d97ec; --empty: #2c2c28;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161614; --card: #21211e; --ink: #ecebe6; --muted: #9a9890; --line: #34332f;
+  --clean: #4cb37b; --accent: #7d97ec; --empty: #2c2c28;
+}
+* { box-sizing: border-box; }
+body { margin: 0; overflow-x: hidden; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 24px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 20px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; min-width: 0; }
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.name { font-size: 1.4rem; font-weight: 700; }
+.level { font-size: 2.6rem; font-weight: 800; line-height: 1; color: var(--accent); }
+.level small { font-size: .9rem; font-weight: 600; color: var(--muted); display: block; text-align: right; }
+.ladder { display: flex; gap: 6px; margin: 16px 0 6px; }
+.rung { flex: 1; height: 10px; border-radius: 5px; background: var(--empty); }
+.rung.on { background: var(--accent); }
+.hint { color: var(--muted); font-size: .9rem; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
+.stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.stat b { display: block; font-size: 1.4rem; }
+.stat span { color: var(--muted); font-size: .8rem; }
+h3 { font-size: .95rem; margin: 20px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.days { display: flex; flex-wrap: wrap; gap: 4px; }
+.day { width: 18px; height: 18px; border-radius: 4px; background: var(--empty); }
+.day.clean { background: var(--clean); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.chart { position: relative; height: 160px; width: 100%; overflow: hidden; }
+.chart canvas { max-width: 100%; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+td { padding: 6px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
+td:first-child { color: var(--muted); width: 32%; }
+.bar { height: 8px; border-radius: 4px; background: var(--empty); overflow: hidden; min-width: 60px; }
+.bar > div { height: 100%; background: var(--accent); }
+.empty { color: var(--muted); font-style: italic; }
+footer { margin-top: 28px; color: var(--muted); font-size: .85rem; }
+@media (max-width: 1060px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Progress Board</h1>
+  <p class="sub">Every self-run day is evidence of who you're becoming. The totals only grow.</p>
+  <div class="grid" id="cards"></div>
+  <footer>A self-run day: plan by 9:00, morning done by the checkpoint, your work explained in your own words, self-marking and PE done. Rank 1 comes with 5 self-run days out of 6; rank 2 with 10 out of 12. A rank, once earned, is yours. <span id="updated"></span></footer>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function card(s, i) {
+  const n = s.now, days = s.days;
+  const mornings = days.filter(d => d.morning_done).length;
+  const tAsk = days.reduce((a, d) => a + d.teachback_asked, 0);
+  const tOk = days.reduce((a, d) => a + d.teachback_ok, 0);
+  const recent = days.slice(-5).filter(d => d.estimate_error !== null);
+  const estErr = recent.length ? Math.round(recent.reduce((a, d) => a + d.estimate_error, 0) / recent.length) + '%' : '–';
+  const nr = n.next_rank;
+  const next = nr ? `Toward rank ${nr.rank}: ${nr.have} of ${nr.days} self-run days (counting your last ${nr.of})` : 'Highest defined rank reached';
+  const topics = Object.entries(s.topics || {}).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+  const tests = s.tests.length ? s.tests.map(t => {
+    const p = Math.round(100 * t.score / t.max);
+    return `<tr><td>${esc(t.subject)}</td><td>${esc(t.topic)}<div class="bar"><div style="width:${p}%"></div></div></td><td style="text-align:right">${esc(t.score)}/${esc(t.max)}</td></tr>`;
+  }).join('') : '<tr><td colspan="3" class="empty">No tests yet</td></tr>';
+  return `<section class="card">
+    <div class="head"><div class="name">${esc(s.name)}</div><div class="level">${n.rank}<small>rank</small></div></div>
+    <div class="ladder">${[0,1,2].map(l => `<div class="rung ${l <= n.rank ? 'on' : ''}"></div>`).join('')}</div>
+    <div class="hint">${next}</div>
+    <div class="stats">
+      <div class="stat"><b>${n.self_run_total}</b><span>self-run days in total</span></div>
+      <div class="stat"><b>${n.self_run_last_10}/${Math.min(days.length, 10)}</b><span>self-run, last 10 days</span></div>
+      <div class="stat"><b>${pct(mornings, days.length)}</b><span>mornings done by the checkpoint</span></div>
+      <div class="stat"><b>${pct(tOk, tAsk)}</b><span>teach-back answers in your own words</span></div>
+      <div class="stat"><b>${estErr}</b><span>time estimate error (last 5 days)</span></div>
+      <div class="stat"><b>${days.slice(-5).reduce((a, d) => a + d.again_mistakes, 0)}</b><span>"again" mistakes caught (last 5 days)</span></div>
+    </div>
+    <h3>Every day</h3>
+    <div class="days">${days.length ? days.map(d => `<div class="day ${d.self_run ? 'clean' : ''}" title="${d.date}"></div>`).join('') : '<span class="empty">No days yet</span>'}</div>
+    <div class="legend"><span><i style="background:var(--clean)"></i>self-run day</span><span><i style="background:var(--empty)"></i>school day</span></div>
+    <h3>Self-run days, adding up</h3>
+    ${days.length ? `<div class="chart"><canvas id="lvl${i}"></canvas></div>` : '<span class="empty">No days yet</span>'}
+    <h3>Current topics</h3>
+    <table>${topics}</table>
+    <h3>Tests</h3>
+    <table>${tests}</table>
+  </section>`;
+}
+
+fetch('data.json').then(r => r.json()).then(data => {
+  document.getElementById('cards').innerHTML = data.students.map(card).join('');
+  data.students.forEach((s, i) => {
+    if (!s.days.length || !window.Chart) return;
+    let total = 0;
+    const cumulative = s.days.map(d => total += d.self_run ? 1 : 0);
+    new Chart(document.getElementById('lvl' + i), {
+      type: 'line',
+      data: { labels: s.days.map(d => d.date.slice(5)), datasets: [{ data: cumulative, borderColor: css('--clean'), backgroundColor: css('--clean') + '33', fill: true, pointRadius: 0, borderWidth: 2, tension: .2 }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { y: { min: 0, ticks: { precision: 0, color: css('--muted') }, grid: { color: css('--line') } },
+                  x: { ticks: { color: css('--muted'), maxTicksLimit: 8 }, grid: { display: false } } } }
+    });
+  });
+  const last = data.students.flatMap(s => s.days.map(d => d.date)).sort().pop();
+  if (last) document.getElementById('updated').textContent = 'Last school day recorded: ' + last + '.';
+}).catch(() => {
+  document.getElementById('cards').innerHTML = '<p class="empty">No data yet.</p>';
+});
+</script>
+</body>
+</html>
