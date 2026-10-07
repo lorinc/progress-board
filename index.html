@@ -81,7 +81,7 @@ function card(s, i) {
     <h3>Every school day</h3>
     ${graph(days, i)}
     <div class="scale">Less <span class="cell"></span><span class="cell l1"></span><span class="cell l2"></span><span class="cell l3"></span><span class="cell l4"></span> More &nbsp;·&nbsp; darkest = a self-run day</div>
-    <h3>Self-run days, adding up</h3>
+    <h3>Self-run days, total</h3>
     ${days.length ? `<div class="chart"><canvas id="lvl${i}"></canvas></div>` : '<span class="empty">No days yet</span>'}
     <h3>Current topics</h3>
     <table>${topics}</table>
