@@ -20,6 +20,7 @@
 .week code { background: var(--empty); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
 .week blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted); }
 .week p > strong:first-child { color: var(--ink); }
+.week a.timed:not([href]) { color: var(--muted); text-decoration: none; cursor: default; }
 </style>
 </head>
 <body>
@@ -148,7 +149,7 @@
 <th>Topic</th>
 <th>Plan with all links</th>
 <th>Friday self-test</th>
-<th>Answers (only after the test)</th>
+<th>Answers (link opens 15:00-15:45)</th>
 </tr>
 </thead>
 <tbody>
@@ -157,14 +158,14 @@
 <td>One-step equations (Khan Academy)</td>
 <td><a target="_blank" rel="noopener" href="https://github.com/lorinc/edu_add/blob/main/topics/maths/us_01_one_step_equations/plan.md">plan</a></td>
 <td><a target="_blank" rel="noopener" href="https://github.com/lorinc/edu_add/blob/main/topics/maths/us_01_one_step_equations/self_test_1.md">self-test 1</a></td>
-<td><a target="_blank" rel="noopener" href="https://github.com/lorinc/edu_add/blob/main/topics/maths/us_01_one_step_equations/self_test_1_answers.md">answers</a></td>
+<td><a class="timed" target="_blank" rel="noopener" data-href="https://github.com/lorinc/edu_add/blob/main/topics/maths/us_01_one_step_equations/self_test_1_answers.md">answers</a></td>
 </tr>
 <tr>
 <td>Godzilla Caretaker</td>
 <td>Place value (Oak National Academy)</td>
 <td><a target="_blank" rel="noopener" href="https://github.com/lorinc/edu_add/blob/main/topics/maths/uk_01_place_value/plan.md">plan</a></td>
 <td><a target="_blank" rel="noopener" href="https://github.com/lorinc/edu_add/blob/main/topics/maths/uk_01_place_value/self_test_1.md">self-test 1</a></td>
-<td><a target="_blank" rel="noopener" href="https://github.com/lorinc/edu_add/blob/main/topics/maths/uk_01_place_value/self_test_1_answers.md">answers</a></td>
+<td><a class="timed" target="_blank" rel="noopener" data-href="https://github.com/lorinc/edu_add/blob/main/topics/maths/uk_01_place_value/self_test_1_answers.md">answers</a></td>
 </tr>
 </tbody>
 </table>
@@ -501,5 +502,20 @@
 <p>Week B: science on Mon, Wed, Fri; English on Tue, Thu. <strong>Friday 23 October is test day:</strong> each block starts with a 30-minute test of 4 of the 12 questions, handwritten, no notes. Start practising the questions from Wednesday: look, close, write.</p>
   </article>
 </main>
+<script>
+// Answer links open only during self-marking, 15:00-15:45 on the reader's clock.
+const OPEN = 15 * 60, CLOSE = 15 * 60 + 45;
+function gate() {
+  const now = new Date(), m = now.getHours() * 60 + now.getMinutes();
+  const open = m >= OPEN && m < CLOSE;
+  document.querySelectorAll('a.timed').forEach(a => {
+    a.dataset.label = a.dataset.label || a.textContent;
+    if (open) { a.href = a.dataset.href; a.textContent = a.dataset.label; a.removeAttribute('title'); }
+    else { a.removeAttribute('href'); a.textContent = 'opens 15:00-15:45'; a.title = 'Answers open during self-marking, after your attempt'; }
+  });
+}
+gate();
+setInterval(gate, 30000);
+</script>
 </body>
 </html>
